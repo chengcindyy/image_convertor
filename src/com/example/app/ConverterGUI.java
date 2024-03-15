@@ -1,4 +1,5 @@
 package com.example.app;
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -14,19 +15,21 @@ import io.github.cdimascio.dotenv.Dotenv;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.ImageType;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.awt.*;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.List;
@@ -37,14 +40,20 @@ import javax.swing.UnsupportedLookAndFeelException;
 
 public class ConverterGUI extends JFrame {
 
-    private static final PathPreference pathPreference = new PathPreference();
+    static PathPreference pathPreference = new PathPreference();
     private final JTextField inputTextField;
     private final JTextField outputTextField;
-    private final Dotenv dotenv = Dotenv.load();
-    private final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
-    private final String ENDPOINT = dotenv.get("AZURE_TEXT_ANALYTICS_ENDPOINT");
+    static Dotenv dotenv = Dotenv.load();
+    private static final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
+    private static final String ENDPOINT = dotenv.get("AZURE_TEXT_ANALYTICS_ENDPOINT");
 
-    private ConverterGUI(String lastUsedFolderPath, String lastUsedFilePath) {
+    //
+    ImageAnalysisClient client = new ImageAnalysisClientBuilder()
+            .credential(new AzureKeyCredential(SUBSCRIPTION_KEY_ONE))
+            .endpoint(ENDPOINT)
+            .buildClient();
+
+    public ConverterGUI(String lastUsedFolderPath, String lastUsedFilePath) {
         // set title and size
         setTitle("PDF to CSV Converter");
         setSize(400, 150);
@@ -74,22 +83,24 @@ public class ConverterGUI extends JFrame {
         }
 
         // Set buttons behavior
-        inputSelectButton.addActionListener(e ->
-                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), inputTextField, null));
+        inputSelectButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), inputTextField, null);
+            }
+        });
 
-        outputSelectButton.addActionListener(e ->
-                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), outputTextField, "csv"));
+        outputSelectButton.addActionListener(new ActionListener() {
+            public void actionPerformed(ActionEvent e) {
+                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), outputTextField, "csv");
+            }
+        });
 
         // call converter
         convertButton.addActionListener(e -> {
             String inputPath = inputTextField.getText().trim();
             String outputPath = outputTextField.getText().trim();
 
-            try {
-                processDirectory(inputPath, outputPath);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
+            processDirectory(inputPath, outputPath);
         });
     }
 
@@ -107,12 +118,16 @@ public class ConverterGUI extends JFrame {
         String lastUsedFolderPath = pathPreference.getLastUsedFolder();
         String lastUsedFilePath = pathPreference.getLastUsedFilePath();
 
-        SwingUtilities.invokeLater(() ->
-                new ConverterGUI(lastUsedFolderPath, lastUsedFilePath).setVisible(true));
+        SwingUtilities.invokeLater(new Runnable() {
+            public void run() {
+                new ConverterGUI(lastUsedFolderPath, lastUsedFilePath).setVisible(true);
+            }
+        });
+
     }
 
     private JFileChooser createFileChooser(boolean selectDirectory, String lastUsedPath, String fileTypeFilter) {
-        JFileChooser chooser = new JFileChooser(lastUsedPath.isEmpty() ? new java.io.File(".") : new java.io.File(lastUsedPath));
+        JFileChooser chooser = new JFileChooser(lastUsedPath.isEmpty() ? new File(".") : new File(lastUsedPath));
 
         if (selectDirectory) {
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -126,7 +141,7 @@ public class ConverterGUI extends JFrame {
         return chooser;
     }
 
-    private void selectPathFromChooser(boolean selectDirectory, String lastUsedPath, JTextField targetTextField, String fileTypeFilter) {
+    public void selectPathFromChooser(boolean selectDirectory, String lastUsedPath, JTextField targetTextField, String fileTypeFilter) {
         JFileChooser chooser = createFileChooser(selectDirectory, lastUsedPath, fileTypeFilter);
         chooser.setDialogTitle(selectDirectory ? "Select Folder" : "Select " + fileTypeFilter + " File");
 
@@ -148,9 +163,8 @@ public class ConverterGUI extends JFrame {
         }
     }
 
-    private void processDirectory(String dirPath, String outputPath) throws IOException {
+    private void processDirectory(String dirPath, String outputPath) {
         File dir = new File(dirPath);
-        boolean hasProcessedFiles = false; // 標記是否處理了任何文件
         if (dir.exists() && dir.isDirectory()) {
             File[] fileList = dir.listFiles();
             if (fileList != null) {
@@ -166,29 +180,28 @@ public class ConverterGUI extends JFrame {
 
                         switch (extension) {
                             case "pdf":
-                                System.out.println("Found PDF File, ConvertPDFToCSV Called");
-                                convertPDFToCSV(filePath, outputPath);
-                                hasProcessedFiles = true; // 標記已處理文件
+                                //check content (img or txt)
+                                System.out.println("Found pdf, PDFContentAnalyzer Called");
+                                PDFContentAnalyzer(file, outputPath);
                                 break;
                             case "jpeg":
                             case "jpg":
+                                System.out.println("Found jpg");
+                                break;
                             case "png":
+                                System.out.println("Found png");
+                                break;
                             case "gif":
+                                break;
                             case "bmp":
                                 System.out.println("Found Image File, ReadImageWithOCR Called");
-                                readImageWithOCR(filePath, outputPath);
-                                hasProcessedFiles = true;
+                                readImageWithOCR(filePath, outputPath); // 确保这个方法已经适当修改来处理单个文件
                                 break;
                             default:
                                 System.out.println("Unsupported file type: " + extension);
                                 break;
                         }
                     }
-                }
-                if (hasProcessedFiles) {
-                    JOptionPane.showMessageDialog(null, "CSV file was created or updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(null, "No valid files found for conversion.", "Info", JOptionPane.INFORMATION_MESSAGE);
                 }
             } else {
                 JOptionPane.showMessageDialog(null, "No files found in the directory.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -198,37 +211,87 @@ public class ConverterGUI extends JFrame {
         }
     }
 
+    public void PDFContentAnalyzer(File file, String outputCSVPath) {
+        try {
+            // Load the PDF file
+            //File file = new File("example.pdf");
+            PDDocument document = Loader.loadPDF(file);
 
-    private void convertPDFToCSV(String inputFolderPath, String outputCSVPath) {
-        List<String> inputPDFs;
-        try (Stream<Path> walk = Files.walk(Paths.get(inputFolderPath))) {
-            inputPDFs = walk
-                    .filter(Files::isRegularFile)
-                    .map(Path::toString)
-                    .filter(path -> path.endsWith(".pdf"))
-                    .toList();
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(null, "Error reading the folder: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
+            // Create PDFTextStripper object
+            PDFTextStripper pdfStripper = new PDFTextStripper();
 
-        for (String inputPDF : inputPDFs) {
-            try (PDDocument document = Loader.loadPDF(new File(inputPDF))) {
-                PDFTextStripper stripper = new PDFTextStripper();
-                String text = stripper.getText(document);
-                List<String> lines = Arrays.asList(text.split("\\r?\\n"));
+            // Extract text from the PDF
+            String text = pdfStripper.getText(document);
 
-                // Now use processTextBasedOnSource which internally calls createCSVPrinter
-                processTextBasedOnSource("PDF", lines, outputCSVPath);
-
-            } catch (IOException e) {
-                JOptionPane.showMessageDialog(null, "An error occurred while processing PDF: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            // Analyze the extracted text
+            if (text.trim().isEmpty()) {
+                System.out.println("The PDF content is primarily image-based.");
+                //TODO: read multi-page image-style PDF
+                System.out.println("Found Image PDF File, ConvertImagePDFToCSV Called");
+                convertImagePDFToCSV(document, outputCSVPath);
+            } else {
+                System.out.println("The PDF content is primarily text-based.");
+                System.out.println("Found Text PDF File, ConvertTextPDFToCSV Called");
+                //read single-page text-style PDF
+                convertTextPDFToCSV(document, outputCSVPath);
             }
+
+            // Close the document
+            document.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
+    public void convertImagePDFToCSV(PDDocument document, String outputCSVPath) {
+        try {
+            // Create PDFRenderer object
+            PDFRenderer pdfRenderer = new PDFRenderer(document);
 
-    private void readImageWithOCR(String imagePath, String outputPath) throws IOException {
+            // Iterate through each page
+            for (int pageIndex = 0; pageIndex < document.getNumberOfPages(); pageIndex++) {
+                // Render the page as an image
+                BufferedImage image = pdfRenderer.renderImageWithDPI(pageIndex, 300, ImageType.RGB);
+
+                System.out.println("Pages: " + document.getNumberOfPages() +
+                        "Image dimensions: " + image.getWidth() + " x " + image.getHeight());
+
+                //try to read the text
+                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                try {
+                    ImageIO.write(image, "png", byteArrayOutputStream);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                byte[] imageData = byteArrayOutputStream.toByteArray();
+
+                StringBuilder resultText = new StringBuilder();
+                try {
+                    ImageAnalysisResult result = client.analyze(
+                            BinaryData.fromBytes(imageData), // imageData: Image data in byte array
+                            Collections.singletonList(VisualFeatures.READ), // visualFeatures
+                            null);
+                    System.out.println("Image analysis results:");
+                    System.out.println("Read:");
+                    for (DetectedTextLine line : result.getRead().getBlocks().get(0).getLines()) {
+                        resultText.append(line.getText()).append("\n");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error occurred while trying to recognize text from the image: " + e.getMessage());
+                    // Handle the error or propagate it as needed
+                    resultText.append("Error occurred while trying to recognize text from the image: ").append(e.getMessage());
+                }
+
+                System.out.println(resultText.toString());
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public void readImageWithOCR(String imagePath, String outputPath) {
         // Initialize Client side of Azure Text Analytics
         ImageAnalysisClient client = new ImageAnalysisClientBuilder()
                 .credential(new AzureKeyCredential(SUBSCRIPTION_KEY_ONE))
@@ -237,12 +300,8 @@ public class ConverterGUI extends JFrame {
 
         // Process the single file with OCR
         String textResult = recognizeText(client, Path.of(imagePath));
-        List<String> lines = Arrays.asList(textResult.split("\\r?\\n"));
-
-        // Since this is OCR, we use OCRTextProcessor directly
-        TextProcessor processor = new OCRTextProcessor();
-        createCSVPrinter(processor, lines, outputPath);
-        processTextBasedOnSource("OCR", lines, outputPath);
+        System.out.println("Result: " + textResult);
+        // TODO: save the result to csv file
     }
 
     private static String recognizeText(ImageAnalysisClient client, Path imagePath) {
@@ -253,6 +312,8 @@ public class ConverterGUI extends JFrame {
                     Collections.singletonList(VisualFeatures.READ), // visualFeatures
                     null); // options: There are no options for READ visual feature
 
+            System.out.println("Image analysis results:");
+            System.out.println("Read:");
             for (DetectedTextLine line : result.getRead().getBlocks().get(0).getLines()) {
                 resultText.append(line.getText()).append("\n");
             }
@@ -264,159 +325,86 @@ public class ConverterGUI extends JFrame {
         return resultText.toString();
     }
 
-    private static class PDFTextProcessor implements TextProcessor {
-        DateTimeFormatter originalFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/M/d");
-        @Override
-        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String drTcm = "";
-            String patientName = "";
-            List<String> visitDates = new ArrayList<>();
-            List<String> fees = new ArrayList<>();
-            boolean isReadingFees = false;
+    public void convertTextPDFToCSV(PDDocument document, String outputCSVPath) {
+        //public void convertPDFToCSV(String inputFolderPath, String outputCSVPath) {
+//        List<String> inputPDFs;
+//        try (Stream<Path> walk = Files.walk(Paths.get(inputFolderPath))) {
+//            inputPDFs = walk
+//                    .filter(Files::isRegularFile)
+//                    .map(Path::toString)
+//                    .filter(path -> path.endsWith(".pdf"))
+//                    .toList();
+//        } catch (IOException e) {
+//            JOptionPane.showMessageDialog(this, "Error reading the folder: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+//            return;
+//        }
 
-            for (String line : lines) {
-                if (line.startsWith("DR. TCM.:") || line.startsWith("DR. TCM:")) {
-                    drTcm = extractValueAfterColon(line);
-                } else if (line.startsWith("Patient Name:")) {
-                    patientName = extractValueAfterColon(line);
-                } else if (line.matches("\\b\\w{3} \\s\\d{1,2}, \\d{4}")) {
-                    visitDates.add(line.trim());
-                } else if (line.startsWith("Subtotal")) {
-                    isReadingFees = true;
-                } else if (isReadingFees && line.matches("\\$\\d+\\.\\d{2}")) {
-                    fees.add(line.trim());
-                }
-            }
-
-            for (int i = 0; i < visitDates.size(); i++) {
-                try {
-                    LocalDate date = LocalDate.parse(visitDates.get(i), originalFormat);
-                    String formattedDate = date.format(targetFormat);
-                    String fee = (i < fees.size()) ? fees.get(i) : "";
-                    csvPrinter.printRecord(drTcm, patientName, formattedDate, fee);
-                } catch (DateTimeParseException e) {
-                    System.err.println("Unable to parse date from line: " + visitDates.get(i));
-                }
-            }
-        }
-    }
-
-    private static String extractValueAfterColon(String line) {
-        return line.substring(line.indexOf(":") + 1).trim();
-    }
-
-    private static class OCRTextProcessor implements TextProcessor {
-        @Override
-        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String patientNumber = lines.get(0);
-            String dr = "";
-            String patientName = "";
-            List<String> visitDates = new ArrayList<>();
-            List<String> fees = new ArrayList<>();
-            List<String> startTime = new ArrayList<>();
-            List<String> endTime = new ArrayList<>();
-
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).startsWith("Practitioner Info" )) {
-                    String[] parts = lines.get(i+2).split(":");
-                    if (parts.length > 1) {
-                        dr = parts[1].trim();
-                    }
-                } else if (lines.get(i).startsWith("Patient Name:")) {
-                    patientName = lines.get(i).substring("Patient Name:".length()).trim();
-                } else if (lines.get(i).matches("^\\w{3} \\d{1,2}, \\d{4}$")) {
-                    visitDates.add(lines.get(i).trim());
-                } else if (lines.get(i).matches("^\\$\\d+\\.\\d{2}$")) {
-                    fees.add(lines.get(i).trim());
-                }
-            }
-
-            List<String> formattedDates = dateConverter(visitDates);
-            List<String> convertedFees = feeConverter(fees);
-
-            for (int i = 0; i < formattedDates.size(); i++) {
-                String dateStr = formattedDates.get(i);
-                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
-            }
-        }
-    }
-
-    private static List<String> dateConverter(List<String> visitDates) {
-        List<String> formattedDates = new ArrayList<>();
-        DateTimeFormatter originalFormat = new DateTimeFormatterBuilder()
-                .parseCaseInsensitive()
-                .appendPattern("MMM d, yyyy")
-                .toFormatter(Locale.ENGLISH);
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-
-        for (String visitDate : visitDates) {
-            try {
-                LocalDate date = LocalDate.parse(visitDate.trim(), originalFormat);
-                String formattedDate = date.format(targetFormat);
-                formattedDates.add(formattedDate);
-            } catch (DateTimeParseException e) {
-                System.err.println("Error: " + e.getMessage());
-                formattedDates.add("Invalid date");
-            }
-        }
-        return formattedDates;
-    }
-
-    private static List<String> feeConverter(List<String> fees) {
-        List<String> convertedFees = new ArrayList<>();
-        for (String fee : fees) {
-            String convertedFee;
-            switch (fee) {
-                case "$50.00":
-                    convertedFee = "30";
-                    break;
-                case "$70.00":
-                case "$89.00":
-                    convertedFee = "50";
-                    break;
-                case "$75.00":
-                    convertedFee = "60";
-                    break;
-                case "$105.00":
-                    convertedFee = "75";
-                    break;
-                case "$133.00":
-                    convertedFee = "75";
-                case "$178.00":
-                    convertedFee = "100";
-                case "$140.00":
-                    convertedFee = "100";
-                default:
-                    convertedFee = "Unknown";
-                    break;
-            }
-            convertedFees.add(convertedFee);
-        }
-        return convertedFees;
-    }
-
-    private void processTextBasedOnSource(String sourceType, List<String> lines, String outputCSVPath) throws IOException {
-        TextProcessor processor;
-        if ("PDF".equals(sourceType)) {
-            processor = new PDFTextProcessor();
-        } else { // If not PDF, default to OCR
-            processor = new OCRTextProcessor();
-        }
-        createCSVPrinter(processor, lines, outputCSVPath);
-    }
-
-    private void createCSVPrinter(TextProcessor processor, List<String> lines, String outputCSVPath) {
         boolean isNewFile = !Files.exists(Paths.get(outputCSVPath));
         try (FileWriter out = new FileWriter(outputCSVPath, true);
              CSVPrinter csvPrinter = isNewFile ?
-                     new CSVPrinter(out, CSVFormat.Builder.create().setHeader("Practitioner Name", "Patient Number", "Subject", "Start Date", "Start Time", "Duration", "End Date", "End Time").build()) :
+                     new CSVPrinter(out, CSVFormat.Builder.create().setHeader("DR.TCM", "Patient Name", "Start Date", "Duration", "End Date").build()) :
                      new CSVPrinter(out, CSVFormat.DEFAULT)) {
-            processor.processText(lines, csvPrinter);
+
+//            for (String inputPDF : inputPDFs) {
+//                try (PDDocument document = Loader.loadPDF(new File(inputPDF))) {
+//                    PDFTextStripper stripper = new PDFTextStripper();
+//                    String text = stripper.getText(document);
+//                    String[] lines = text.split("\\r?\\n");
+//
+//                    processPDFLines(csvPrinter, lines);
+//                }
+//            }
+
+            PDFTextStripper stripper = new PDFTextStripper();
+            String text = stripper.getText(document);
+            String[] lines = text.split("\\r?\\n");
+
+            processTextPDFLines(csvPrinter, lines);
+
+
+            JOptionPane.showMessageDialog(this, "CSV file was created or updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
         } catch (IOException e) {
-            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "An error occurred: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    private static void processTextPDFLines(CSVPrinter csvPrinter, String[] lines) throws IOException {
+        String drTcm = "";
+        String patientName = "";
+        List<String> visitDates = new ArrayList<>();
+        List<String> fees = new ArrayList<>();
+        boolean isReadingFees = false;
+
+        DateTimeFormatter originalFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
+        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/M/d");
+
+        for (String line : lines) {
+            String trim = line.substring(line.indexOf(":") + 1).trim();
+            if (line.startsWith("DR.TCM.:") || line.startsWith("DR. TCM:")) {
+                drTcm = trim;
+            } else if (line.startsWith("Patient Name:")) {
+
+                patientName = trim;
+            } else if (line.matches("\\b\\w{3}\\s\\d{1,2},\\d{4}")) {
+                visitDates.add(line.trim());
+            } else if (line.startsWith("Subtotal")) {
+                isReadingFees = true;
+            } else if (isReadingFees && line.matches("\\$\\d+\\.\\d{2}")) {
+                String fee = line.trim();
+                String duration = fee.equals("$70.00") ? "50" : fee.equals("$75.00") ? "60" : "0";
+                fees.add(duration);
+            }
+        }
+
+        for (int i = 0; i < visitDates.size(); i++) {
+            String dateStr = visitDates.get(i).replace(",", ", ");
+            try {
+                LocalDate date = LocalDate.parse(dateStr, originalFormat);
+                String formattedDate = date.format(targetFormat);
+                csvPrinter.printRecord(drTcm, patientName, formattedDate, fees.get(i));
+            } catch (DateTimeParseException e) {
+                System.err.println("Unable to parse date from line: " + visitDates.get(i));
+            }
+        }
+    }
 }
