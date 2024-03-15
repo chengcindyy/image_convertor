@@ -176,8 +176,8 @@ public class ConverterGUI extends JFrame {
                             case "gif":
                             case "bmp":
                                 System.out.println("Found Image File, ReadImageWithOCR Called");
-                                readImageWithOCR(filePath, outputPath); // 确保这个方法已经适当修改来处理单个文件
-                                hasProcessedFiles = true; // 標記已處理文件
+                                readImageWithOCR(filePath, outputPath);
+                                hasProcessedFiles = true;
                                 break;
                             default:
                                 System.out.println("Unsupported file type: " + extension);
@@ -309,23 +309,26 @@ public class ConverterGUI extends JFrame {
     private static class OCRTextProcessor implements TextProcessor {
         @Override
         public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String patientNumber = "";
-            String drTcm = "";
+            String patientNumber = lines.get(0);
+            String dr = "";
             String patientName = "";
             List<String> visitDates = new ArrayList<>();
             List<String> fees = new ArrayList<>();
+            List<String> startTime = new ArrayList<>();
+            List<String> endTime = new ArrayList<>();
 
-            for (String line : lines) {
-                if (line.startsWith("/")){
-                    patientNumber = line.substring(1).trim();
-                } else if (line.startsWith("DR. TCM:" ) || line.startsWith("R.TCM.P:")) {
-                    drTcm = line.substring("DR. TCM:".length()).trim();
-                } else if (line.startsWith("Patient Name:")) {
-                    patientName = line.substring("Patient Name:".length()).trim();
-                } else if (line.matches("^\\w{3} \\d{1,2}, \\d{4}$")) {
-                    visitDates.add(line.trim());
-                } else if (line.matches("^\\$\\d+\\.\\d{2}$")) {
-                    fees.add(line.trim());
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).startsWith("Practitioner Info" )) {
+                    String[] parts = lines.get(i+2).split(":");
+                    if (parts.length > 1) {
+                        dr = parts[1].trim();
+                    }
+                } else if (lines.get(i).startsWith("Patient Name:")) {
+                    patientName = lines.get(i).substring("Patient Name:".length()).trim();
+                } else if (lines.get(i).matches("^\\w{3} \\d{1,2}, \\d{4}$")) {
+                    visitDates.add(lines.get(i).trim());
+                } else if (lines.get(i).matches("^\\$\\d+\\.\\d{2}$")) {
+                    fees.add(lines.get(i).trim());
                 }
             }
 
@@ -335,7 +338,7 @@ public class ConverterGUI extends JFrame {
             for (int i = 0; i < formattedDates.size(); i++) {
                 String dateStr = formattedDates.get(i);
                 String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-                csvPrinter.printRecord(patientNumber, drTcm, patientName, dateStr, fee, dateStr);
+                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
             }
         }
     }
@@ -408,7 +411,7 @@ public class ConverterGUI extends JFrame {
         boolean isNewFile = !Files.exists(Paths.get(outputCSVPath));
         try (FileWriter out = new FileWriter(outputCSVPath, true);
              CSVPrinter csvPrinter = isNewFile ?
-                     new CSVPrinter(out, CSVFormat.Builder.create().setHeader("Patient Number", "DR.TCM", "Patient Name", "Start Date", "Duration", "End Date", "Sum").build()) :
+                     new CSVPrinter(out, CSVFormat.Builder.create().setHeader("Practitioner Name", "Patient Number", "Subject", "Start Date", "Start Time", "Duration", "End Date", "End Time").build()) :
                      new CSVPrinter(out, CSVFormat.DEFAULT)) {
             processor.processText(lines, csvPrinter);
         } catch (IOException e) {
