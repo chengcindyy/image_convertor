@@ -28,9 +28,14 @@ public abstract class TextProcessor {
             patientNumber = String.valueOf(parsedPatientNumber);
         } catch (NumberFormatException e) {
             // Parsing failed, patientNumber is not an integer
-            patientNumber = "Invalid";
-            // Print error message to the runtime terminal
-            System.err.println("Error: patientNumber is not an integer.");
+            if (patientNumber.equals("UN")) {
+                System.err.println("Patient Do Not Have Patient Number Yet");
+            } else {
+                patientNumber = "Invalid";
+                // Print error message to the runtime terminal
+                System.err.println("Error: patientNumber is not an integer.");
+            }
+
         }
 
         String dr = "";
