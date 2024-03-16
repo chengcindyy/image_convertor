@@ -240,8 +240,6 @@ public class ConverterGUI extends JFrame {
         List<String> lines = Arrays.asList(textResult.split("\\r?\\n"));
 
         // Since this is OCR, we use OCRTextProcessor directly
-        TextProcessor processor = new OCRTextProcessor();
-        createCSVPrinter(processor, lines, outputPath);
         processTextBasedOnSource("OCR", lines, outputPath);
     }
 
