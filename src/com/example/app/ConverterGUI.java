@@ -223,7 +223,7 @@ public class ConverterGUI extends JFrame {
             // Analyze the extracted text
             if (text.trim().isEmpty()) {
                 System.out.println("The PDF content is primarily image-based.");
-                //TODO: read multi-page image-style PDF
+                //read multi-page image-style PDF
                 System.out.println("Found Image PDF File, ConvertImagePDFToCSV Called");
                 convertImagePDFToCSV(document, outputCSVPath);
             } else {
@@ -250,9 +250,6 @@ public class ConverterGUI extends JFrame {
                 // Render the page as an image
                 BufferedImage image = pdfRenderer.renderImageWithDPI(pageIndex, 300, ImageType.RGB);
 
-                System.out.println("Pages: " + document.getNumberOfPages() +
-                        "Image dimensions: " + image.getWidth() + " x " + image.getHeight());
-
                 //try to read the text
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
                 try {
@@ -268,8 +265,7 @@ public class ConverterGUI extends JFrame {
                             BinaryData.fromBytes(imageData), // imageData: Image data in byte array
                             Collections.singletonList(VisualFeatures.READ), // visualFeatures
                             null);
-                    System.out.println("Image analysis results:");
-                    System.out.println("Read:");
+
                     for (DetectedTextLine line : result.getRead().getBlocks().get(0).getLines()) {
                         resultText.append(line.getText()).append("\n");
                     }
@@ -297,6 +293,7 @@ public class ConverterGUI extends JFrame {
             List<String> lines = Arrays.asList(text.split("\\r?\\n"));
             // Now use processTextBasedOnSource which internally calls createCSVPrinter
             processTextBasedOnSource("textPDF", lines, outputCSVPath);
+            //System.out.println(lines);
         } catch (IOException e) {
             JOptionPane.showMessageDialog(null, "An error occurred while processing PDF: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -332,138 +329,98 @@ public class ConverterGUI extends JFrame {
         return resultText.toString();
     }
 
-    private static class PDFTextProcessor implements TextProcessor {
-        DateTimeFormatter originalFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/M/d");
+//    private static class PDFTextProcessor implements TextProcessor {
+//        @Override
+//        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
+//            String dr = "";
+//            String patientNumber = "";
+//            String patientName = "";
+//            List<String> visitDates = new ArrayList<>();
+//            List<String> fees = new ArrayList<>();
+//            String startTime = "";
+//            String endTime = "";
+//            boolean isReadingFees = false;
+//
+//            for (int i = 0; i < lines.size(); i++) {
+//                String line = lines.get(i);
+//                if (line.startsWith("Practitioner Info" )) {
+//                    String[] parts = lines.get(i+1).split(":");
+//                    if (parts.length > 1) {
+//                        dr = parts[1].trim();
+//                    }
+//                }  else if (line.startsWith("Patient Name:")) {
+//                    patientName = line.substring(line.indexOf(":") + 1).trim();
+//                } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,\\s*\\d{4}\\s*$")) {
+//                    visitDates.add(line.trim());
+//                } else if (line.startsWith("Subtotal")) {
+//                    isReadingFees = true;
+//                } else if (isReadingFees && lines.get(i).matches("\\$\\d+\\.\\d{2}")) {
+//                    String fee = line.trim();
+//                    fees.add(fee);
+//                }
+//            }
+//            List<String> formattedDates = dateConverter(visitDates);
+//            List<String> convertedFees = feeConverter(fees);
+//
+//            for (int i = 0; i < formattedDates.size(); i++) {
+//                String dateStr = formattedDates.get(i);
+//                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
+//                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
+//            }
+//        }
+//    }
+//
+//    private static class OCRTextProcessor implements TextProcessor {
+//        @Override
+//        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
+//            String patientNumber = lines.get(0);
+//            String dr = "";
+//            String patientName = "";
+//            List<String> visitDates = new ArrayList<>();
+//            List<String> fees = new ArrayList<>();
+//            String startTime = "";
+//            String endTime = "";
+//
+//            for (int i = 0; i < lines.size(); i++) {
+//                if (lines.get(i).startsWith("Practitioner Info" )) {
+//                    String[] parts = lines.get(i+2).split(":");
+//                    if (parts.length > 1) {
+//                        dr = parts[1].trim();
+//                    }
+//                } else if (lines.get(i).startsWith("Patient Name:")) {
+//                    patientName = lines.get(i).substring("Patient Name:".length()).trim();
+//                } else if (lines.get(i).matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,\\s*\\d{4}\\s*$")) { //"^\\w{3} \\d{1,2}, \\d{4}$"
+//                    visitDates.add(lines.get(i).trim());
+//                } else if (lines.get(i).matches("^\\$\\d+\\.\\d{2}$")) {
+//                    fees.add(lines.get(i).trim());
+//                }
+//            }
+//
+//            List<String> formattedDates = dateConverter(visitDates);
+//            List<String> convertedFees = feeConverter(fees);
+//
+//            for (int i = 0; i < formattedDates.size(); i++) {
+//                String dateStr = formattedDates.get(i);
+//                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
+//                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
+//            }
+//        }
+//    }
+
+    private static class PDFTextProcessor extends TextProcessor {
         @Override
         public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String drTcm = "";
-            String patientName = "";
-            List<String> visitDates = new ArrayList<>();
-            List<String> fees = new ArrayList<>();
-            boolean isReadingFees = false;
-
-            for (String line : lines) {
-                if (line.startsWith("DR. TCM.:") || line.startsWith("DR. TCM:")) {
-                    drTcm = extractValueAfterColon(line);
-                } else if (line.startsWith("Patient Name:")) {
-                    patientName = extractValueAfterColon(line);
-                } else if (line.matches("\\b\\w{3} \\s\\d{1,2}, \\d{4}")) {
-                    visitDates.add(line.trim());
-                } else if (line.startsWith("Subtotal")) {
-                    isReadingFees = true;
-                } else if (isReadingFees && line.matches("\\$\\d+\\.\\d{2}")) {
-                    fees.add(line.trim());
-                }
-            }
-
-            for (int i = 0; i < visitDates.size(); i++) {
-                try {
-                    LocalDate date = LocalDate.parse(visitDates.get(i), originalFormat);
-                    String formattedDate = date.format(targetFormat);
-                    String fee = (i < fees.size()) ? fees.get(i) : "";
-                    csvPrinter.printRecord(drTcm, patientName, formattedDate, fee);
-                } catch (DateTimeParseException e) {
-                    System.err.println("Unable to parse date from line: " + visitDates.get(i));
-                }
-            }
+            extractInfo(lines, csvPrinter, TextProcessor.PDFTEXTPROCESSOR);
         }
     }
 
-    private static String extractValueAfterColon(String line) {
-        return line.substring(line.indexOf(":") + 1).trim();
-    }
-
-    private static class OCRTextProcessor implements TextProcessor {
+    private static class OCRTextProcessor extends TextProcessor {
         @Override
         public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String patientNumber = lines.get(0);
-            String dr = "";
-            String patientName = "";
-            List<String> visitDates = new ArrayList<>();
-            List<String> fees = new ArrayList<>();
-            List<String> startTime = new ArrayList<>();
-            List<String> endTime = new ArrayList<>();
-
-            for (int i = 0; i < lines.size(); i++) {
-                if (lines.get(i).startsWith("Practitioner Info" )) {
-                    String[] parts = lines.get(i+2).split(":");
-                    if (parts.length > 1) {
-                        dr = parts[1].trim();
-                    }
-                } else if (lines.get(i).startsWith("Patient Name:")) {
-                    patientName = lines.get(i).substring("Patient Name:".length()).trim();
-                } else if (lines.get(i).matches("^\\w{3} \\d{1,2}, \\d{4}$")) {
-                    visitDates.add(lines.get(i).trim());
-                } else if (lines.get(i).matches("^\\$\\d+\\.\\d{2}$")) {
-                    fees.add(lines.get(i).trim());
-                }
-            }
-
-            List<String> formattedDates = dateConverter(visitDates);
-            List<String> convertedFees = feeConverter(fees);
-
-            for (int i = 0; i < formattedDates.size(); i++) {
-                String dateStr = formattedDates.get(i);
-                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
-            }
+            extractInfo(lines, csvPrinter, TextProcessor.OCRTEXTPROCESSOR);
         }
     }
 
-    private static List<String> dateConverter(List<String> visitDates) {
-        List<String> formattedDates = new ArrayList<>();
-        DateTimeFormatter originalFormat = new DateTimeFormatterBuilder()
-                .parseCaseInsensitive()
-                .appendPattern("MMM d, yyyy")
-                .toFormatter(Locale.ENGLISH);
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd");
-
-        for (String visitDate : visitDates) {
-            try {
-                LocalDate date = LocalDate.parse(visitDate.trim(), originalFormat);
-                String formattedDate = date.format(targetFormat);
-                formattedDates.add(formattedDate);
-            } catch (DateTimeParseException e) {
-                System.err.println("Error: " + e.getMessage());
-                formattedDates.add("Invalid date");
-            }
-        }
-        return formattedDates;
-    }
-
-    private static List<String> feeConverter(List<String> fees) {
-        List<String> convertedFees = new ArrayList<>();
-        for (String fee : fees) {
-            String convertedFee;
-            switch (fee) {
-                case "$50.00":
-                    convertedFee = "30";
-                    break;
-                case "$70.00":
-                case "$89.00":
-                    convertedFee = "50";
-                    break;
-                case "$75.00":
-                    convertedFee = "60";
-                    break;
-                case "$105.00":
-                    convertedFee = "75";
-                    break;
-                case "$133.00":
-                    convertedFee = "75";
-                case "$178.00":
-                    convertedFee = "100";
-                case "$140.00":
-                    convertedFee = "100";
-                default:
-                    convertedFee = "Unknown";
-                    break;
-            }
-            convertedFees.add(convertedFee);
-        }
-        return convertedFees;
-    }
 
     private void processTextBasedOnSource(String sourceType, List<String> lines, String outputCSVPath) throws IOException {
         TextProcessor processor;
