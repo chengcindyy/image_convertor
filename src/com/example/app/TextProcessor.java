@@ -16,10 +16,22 @@ public abstract class TextProcessor {
     public static final int PDFTEXTPROCESSOR = 0;
     public static final int OCRTEXTPROCESSOR = 1;
     protected void extractInfo(List<String> lines, CSVPrinter csvPrinter, int processorType) throws IOException {
+
+        //System.out.println(lines);
         String patientNumber = "";
         if (processorType == OCRTEXTPROCESSOR) {
             patientNumber = lines.get(0);
         } else if (processorType == PDFTEXTPROCESSOR) {}
+        try {
+            int parsedPatientNumber = Integer.parseInt(patientNumber);
+            // Parsing successful, assign the parsed value to patientNumber
+            patientNumber = String.valueOf(parsedPatientNumber);
+        } catch (NumberFormatException e) {
+            // Parsing failed, patientNumber is not an integer
+            patientNumber = "Invalid";
+            // Print error message to the runtime terminal
+            System.err.println("Error: patientNumber is not an integer.");
+        }
 
         String dr = "";
         String patientName = "";
@@ -45,7 +57,8 @@ public abstract class TextProcessor {
                 }
             } else if (line.startsWith("Patient Name:")) {
                 patientName = line.substring("Patient Name:".length()).trim();
-            } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,\\s*\\d{4}\\s*$")) {
+            } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,?\\s*\\d{4}\\s*$")) {
+
                 visitDates.add(line.trim());
             } else if (line.matches("^\\$\\d+\\.\\d{2}$")) {
                 fees.add(line.trim());
@@ -67,13 +80,18 @@ public abstract class TextProcessor {
 
         DateTimeFormatter originalFormat = new DateTimeFormatterBuilder()
                 .parseCaseInsensitive()
-                .appendPattern("MMM d")
+                .appendPattern("MMM")
+                .optionalStart()
+                .appendPattern(" ")
+                .optionalEnd()
+                .appendPattern("d")
                 .appendLiteral(',')
                 .optionalStart()
                 .appendPattern(" ")
                 .optionalEnd()
                 .appendPattern("yyyy")
                 .toFormatter(Locale.ENGLISH);
+
         DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
         for (String visitDate : visitDates) {
@@ -99,6 +117,7 @@ public abstract class TextProcessor {
                     convertedFee = "30";
                     break;
                 case "$70.00":
+                case "$84.00":
                 case "$89.00":
                     convertedFee = "50";
                     break;

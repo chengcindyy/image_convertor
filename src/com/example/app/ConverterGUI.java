@@ -29,10 +29,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeFormatterBuilder;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.List;
 
@@ -44,6 +40,7 @@ public class ConverterGUI extends JFrame {
     private static final PathPreference pathPreference = new PathPreference();
     private final JTextField inputTextField;
     private final JTextField outputTextField;
+    private JLabel progressLabel;
     private final Dotenv dotenv = Dotenv.load();
     private final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
     private final String ENDPOINT = dotenv.get("AZURE_TEXT_ANALYTICS_ENDPOINT");
@@ -56,7 +53,7 @@ public class ConverterGUI extends JFrame {
     private ConverterGUI(String lastUsedFolderPath, String lastUsedFilePath) {
         // set title and size
         setTitle("PDF to CSV Converter");
-        setSize(400, 150);
+        setSize(400, 200); // Increased height to accommodate the new text area
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new FlowLayout());
 
@@ -66,6 +63,7 @@ public class ConverterGUI extends JFrame {
         JButton convertButton = new JButton("Convert to CSV");
         JButton inputSelectButton = new JButton("Select Input Folder");
         JButton outputSelectButton = new JButton("Select a Output file");
+        progressLabel = new JLabel("Click to start");
 
         // Add components to window
         add(inputSelectButton);
@@ -73,6 +71,7 @@ public class ConverterGUI extends JFrame {
         add(outputSelectButton);
         add(outputTextField);
         add(convertButton);
+        add(progressLabel);
 
         // Use saved path and file name
         if (!lastUsedFolderPath.isEmpty()) {
@@ -94,14 +93,19 @@ public class ConverterGUI extends JFrame {
             String inputPath = inputTextField.getText().trim();
             String outputPath = outputTextField.getText().trim();
 
+            // Disable the convert button while processing
+            convertButton.setEnabled(false);
+
             try {
                 processDirectory(inputPath, outputPath);
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
+            } finally {
+                // Re-enable the convert button after processing
+                convertButton.setEnabled(true);
             }
         });
     }
-
     public static void main(String[] args) {
 
         try {
@@ -159,43 +163,61 @@ public class ConverterGUI extends JFrame {
 
     private void processDirectory(String dirPath, String outputPath) throws IOException {
         File dir = new File(dirPath);
-        boolean hasProcessedFiles = false; // 標記是否處理了任何文件
+        boolean hasProcessedFiles = false;
         if (dir.exists() && dir.isDirectory()) {
             File[] fileList = dir.listFiles();
             if (fileList != null) {
-                for (File file : fileList) {
+
+                int fileListSize = fileList.length;
+                System.out.println("Reading "+ fileListSize + " file(s)...");
+
+                for (int i = 0; i < fileListSize; i++) {
+
+                    File file = fileList[i];
+                    int remainingFiles = fileListSize - i;
+
                     if (file.isFile()) {
                         String filePath = file.getAbsolutePath();
                         String extension = "";
 
-                        int i = filePath.lastIndexOf('.');
-                        if (i > 0) {
-                            extension = filePath.substring(i+1).toLowerCase();
+                        int j = filePath.lastIndexOf('.');
+                        if (j > 0) {
+                            extension = filePath.substring(j+1).toLowerCase();
                         }
+
+                        System.out.println("Processing " + file.getName() + "... "
+                                + remainingFiles + " file(s) remained.");
+                        // TODO:Update the status label with processing progress
+//                        SwingUtilities.invokeLater(() -> {
+//                            progressLabel.setText("Processing " + file.getName() + "... " + remainingFiles + " file(s) remained.");
+//                        });
 
                         switch (extension) {
                             case "pdf":
                                 //check content (img or txt)
-                                System.out.println("Found pdf, PDFContentAnalyzer Called");
+                                //System.out.println("Found pdf, PDFContentAnalyzer Called");
                                 PDFContentAnalyzer(file, outputPath);
-                                hasProcessedFiles = true; // 標記已處理文件
+                                hasProcessedFiles = true;
                                 break;
                             case "jpeg":
                             case "jpg":
                             case "png":
                             case "gif":
                             case "bmp":
-                                System.out.println("Found Image File, ReadImageWithOCR Called");
+                                //System.out.println("Found Image File, ReadImageWithOCR Called");
                                 readImageWithOCR(filePath, outputPath);
                                 hasProcessedFiles = true;
                                 break;
                             default:
-                                System.out.println("Unsupported file type: " + extension);
+                                System.err.println("Unsupported file type: " + extension);
                                 break;
                         }
+
                     }
                 }
                 if (hasProcessedFiles) {
+                    System.out.println("Completed!");
+                    progressLabel.setText("Completed!");
                     JOptionPane.showMessageDialog(null, "CSV file was created or updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
                 } else {
                     JOptionPane.showMessageDialog(null, "No valid files found for conversion.", "Info", JOptionPane.INFORMATION_MESSAGE);
@@ -222,12 +244,12 @@ public class ConverterGUI extends JFrame {
 
             // Analyze the extracted text
             if (text.trim().isEmpty()) {
-                System.out.println("The PDF content is primarily image-based.");
+                //System.out.println("The PDF content is primarily image-based.");
                 //read multi-page image-style PDF
                 System.out.println("Found Image PDF File, ConvertImagePDFToCSV Called");
                 convertImagePDFToCSV(document, outputCSVPath);
             } else {
-                System.out.println("The PDF content is primarily text-based.");
+                //System.out.println("The PDF content is primarily text-based.");
                 System.out.println("Found Text PDF File, ConvertTextPDFToCSV Called");
                 //read single-page text-style PDF
                 convertTextPDFToCSV(document, outputCSVPath);
@@ -299,18 +321,17 @@ public class ConverterGUI extends JFrame {
         }
     }
 
-
     private void readImageWithOCR(String imagePath, String outputPath) throws IOException {
 
         // Process the single file with OCR
-        String textResult = recognizeText(Path.of(imagePath));
+        String textResult = recognizeTextInImage(Path.of(imagePath));
         List<String> lines = Arrays.asList(textResult.split("\\r?\\n"));
 
         // Since this is OCR, we use OCRTextProcessor directly
         processTextBasedOnSource("OCR", lines, outputPath);
     }
 
-    private String recognizeText(Path imagePath) {
+    private String recognizeTextInImage(Path imagePath) {
         StringBuilder resultText = new StringBuilder();
         try {
             ImageAnalysisResult result = client.analyze(
@@ -329,84 +350,6 @@ public class ConverterGUI extends JFrame {
         return resultText.toString();
     }
 
-//    private static class PDFTextProcessor implements TextProcessor {
-//        @Override
-//        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-//            String dr = "";
-//            String patientNumber = "";
-//            String patientName = "";
-//            List<String> visitDates = new ArrayList<>();
-//            List<String> fees = new ArrayList<>();
-//            String startTime = "";
-//            String endTime = "";
-//            boolean isReadingFees = false;
-//
-//            for (int i = 0; i < lines.size(); i++) {
-//                String line = lines.get(i);
-//                if (line.startsWith("Practitioner Info" )) {
-//                    String[] parts = lines.get(i+1).split(":");
-//                    if (parts.length > 1) {
-//                        dr = parts[1].trim();
-//                    }
-//                }  else if (line.startsWith("Patient Name:")) {
-//                    patientName = line.substring(line.indexOf(":") + 1).trim();
-//                } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,\\s*\\d{4}\\s*$")) {
-//                    visitDates.add(line.trim());
-//                } else if (line.startsWith("Subtotal")) {
-//                    isReadingFees = true;
-//                } else if (isReadingFees && lines.get(i).matches("\\$\\d+\\.\\d{2}")) {
-//                    String fee = line.trim();
-//                    fees.add(fee);
-//                }
-//            }
-//            List<String> formattedDates = dateConverter(visitDates);
-//            List<String> convertedFees = feeConverter(fees);
-//
-//            for (int i = 0; i < formattedDates.size(); i++) {
-//                String dateStr = formattedDates.get(i);
-//                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-//                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
-//            }
-//        }
-//    }
-//
-//    private static class OCRTextProcessor implements TextProcessor {
-//        @Override
-//        public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-//            String patientNumber = lines.get(0);
-//            String dr = "";
-//            String patientName = "";
-//            List<String> visitDates = new ArrayList<>();
-//            List<String> fees = new ArrayList<>();
-//            String startTime = "";
-//            String endTime = "";
-//
-//            for (int i = 0; i < lines.size(); i++) {
-//                if (lines.get(i).startsWith("Practitioner Info" )) {
-//                    String[] parts = lines.get(i+2).split(":");
-//                    if (parts.length > 1) {
-//                        dr = parts[1].trim();
-//                    }
-//                } else if (lines.get(i).startsWith("Patient Name:")) {
-//                    patientName = lines.get(i).substring("Patient Name:".length()).trim();
-//                } else if (lines.get(i).matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,\\s*\\d{4}\\s*$")) { //"^\\w{3} \\d{1,2}, \\d{4}$"
-//                    visitDates.add(lines.get(i).trim());
-//                } else if (lines.get(i).matches("^\\$\\d+\\.\\d{2}$")) {
-//                    fees.add(lines.get(i).trim());
-//                }
-//            }
-//
-//            List<String> formattedDates = dateConverter(visitDates);
-//            List<String> convertedFees = feeConverter(fees);
-//
-//            for (int i = 0; i < formattedDates.size(); i++) {
-//                String dateStr = formattedDates.get(i);
-//                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-//                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
-//            }
-//        }
-//    }
-
     private static class PDFTextProcessor extends TextProcessor {
         @Override
         public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
@@ -420,7 +363,6 @@ public class ConverterGUI extends JFrame {
             extractInfo(lines, csvPrinter, TextProcessor.OCRTEXTPROCESSOR);
         }
     }
-
 
     private void processTextBasedOnSource(String sourceType, List<String> lines, String outputCSVPath) throws IOException {
         TextProcessor processor;
