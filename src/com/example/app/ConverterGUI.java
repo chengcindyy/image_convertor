@@ -263,39 +263,38 @@ public class ConverterGUI extends JFrame {
     }
 
     private static class PDFTextProcessor implements TextProcessor {
-        DateTimeFormatter originalFormat = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH);
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/M/d");
         @Override
         public void processText(List<String> lines, CSVPrinter csvPrinter) throws IOException {
-            String drTcm = "";
+            String dr = "";
+            String patientNumber = "";
             String patientName = "";
             List<String> visitDates = new ArrayList<>();
             List<String> fees = new ArrayList<>();
+            List<String> startTime = new ArrayList<>();
+            List<String> endTime = new ArrayList<>();
             boolean isReadingFees = false;
 
             for (String line : lines) {
-                if (line.startsWith("DR. TCM.:") || line.startsWith("DR. TCM:")) {
-                    drTcm = extractValueAfterColon(line);
+                if (line.startsWith("DR.TCM.:") || line.startsWith("DR. TCM:")) {
+                    dr = line.substring(line.indexOf(":") + 1).trim();
                 } else if (line.startsWith("Patient Name:")) {
-                    patientName = extractValueAfterColon(line);
-                } else if (line.matches("\\b\\w{3} \\s\\d{1,2}, \\d{4}")) {
+                    patientName = line.substring(line.indexOf(":") + 1).trim();
+                } else if (line.matches("\\b\\w{3}\\s\\d{1,2},\\d{4}")) {
                     visitDates.add(line.trim());
                 } else if (line.startsWith("Subtotal")) {
                     isReadingFees = true;
                 } else if (isReadingFees && line.matches("\\$\\d+\\.\\d{2}")) {
-                    fees.add(line.trim());
+                    String fee = line.trim();
+                    fees.add(fee);
                 }
             }
+            List<String> formattedDates = dateConverter(visitDates);
+            List<String> convertedFees = feeConverter(fees);
 
-            for (int i = 0; i < visitDates.size(); i++) {
-                try {
-                    LocalDate date = LocalDate.parse(visitDates.get(i), originalFormat);
-                    String formattedDate = date.format(targetFormat);
-                    String fee = (i < fees.size()) ? fees.get(i) : "";
-                    csvPrinter.printRecord(drTcm, patientName, formattedDate, fee);
-                } catch (DateTimeParseException e) {
-                    System.err.println("Unable to parse date from line: " + visitDates.get(i));
-                }
+            for (int i = 0; i < formattedDates.size(); i++) {
+                String dateStr = formattedDates.get(i);
+                String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
+                csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
             }
         }
     }
@@ -343,9 +342,15 @@ public class ConverterGUI extends JFrame {
 
     private static List<String> dateConverter(List<String> visitDates) {
         List<String> formattedDates = new ArrayList<>();
+        // 使用DateTimeFormatterBuilder增强格式的灵活性
         DateTimeFormatter originalFormat = new DateTimeFormatterBuilder()
                 .parseCaseInsensitive()
-                .appendPattern("MMM d, yyyy")
+                .appendPattern("MMM d")
+                .appendLiteral(',')
+                .optionalStart()
+                .appendPattern(" ")
+                .optionalEnd()
+                .appendPattern("yyyy")
                 .toFormatter(Locale.ENGLISH);
         DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd");
 
@@ -355,12 +360,14 @@ public class ConverterGUI extends JFrame {
                 String formattedDate = date.format(targetFormat);
                 formattedDates.add(formattedDate);
             } catch (DateTimeParseException e) {
-                System.err.println("Error: " + e.getMessage());
+                System.err.println("Error parsing date: " + e.getMessage());
                 formattedDates.add("Invalid date");
             }
         }
         return formattedDates;
     }
+
+
 
     private static List<String> feeConverter(List<String> fees) {
         List<String> convertedFees = new ArrayList<>();

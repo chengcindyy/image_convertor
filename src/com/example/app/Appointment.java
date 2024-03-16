@@ -11,9 +11,10 @@ public class Appointment {
     LocalTime startTime;
     LocalDate endDate;
     LocalTime endTime;
-    String duration;
+    int duration;
+    private long countForDate;
 
-    public Appointment(String practitionerName, String patientNumber, String subject, LocalDate startDate, LocalTime startTime, String duration, LocalDate endDate, LocalTime endTime) {
+    public Appointment(String practitionerName, String patientNumber, String subject, LocalDate startDate, LocalTime startTime, int duration, LocalDate endDate, LocalTime endTime ) {
         this.practitionerName = practitionerName;
         this.patientNumber = patientNumber;
         this.subject = subject;
@@ -22,9 +23,7 @@ public class Appointment {
         this.duration = duration;
         this.endDate = endDate;
         this.endTime = endTime;
-
     }
-
     public String getPractitionerName() {
         return practitionerName;
     }
@@ -81,11 +80,11 @@ public class Appointment {
         this.endTime = endTime;
     }
 
-    public String getDuration() {
+    public int getDuration() {
         return duration;
     }
 
-    public void setDuration(String duration) {
+    public void setDuration(int duration) {
         this.duration = duration;
     }
 
@@ -100,6 +99,7 @@ public class Appointment {
                 ", endDate=" + endDate +
                 ", endTime=" + endTime +
                 ", duration='" + duration + '\'' +
+                ", countForDate='" + countForDate + '\'' +
                 '}';
     }
 }
