@@ -57,8 +57,7 @@ public abstract class TextProcessor {
                 }
             } else if (line.startsWith("Patient Name:")) {
                 patientName = line.substring("Patient Name:".length()).trim();
-            } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*,?\\s*\\d{4}\\s*$")) {
-
+            } else if (line.matches("^\\s*\\w{3}\\s*\\d{1,2}\\s*[,.]?\\s*\\d{4}\\s*$")) {
                 visitDates.add(line.trim());
             } else if (line.matches("^\\$\\d+\\.\\d{2}$")) {
                 fees.add(line.trim());
@@ -85,7 +84,15 @@ public abstract class TextProcessor {
                 .appendPattern(" ")
                 .optionalEnd()
                 .appendPattern("d")
-                .appendLiteral(',')
+                .optionalStart()
+                .appendPattern(" ")
+                .optionalEnd()
+                .optionalStart()
+                .appendLiteral(",")
+                .optionalEnd()
+                .optionalStart()
+                .appendLiteral(".")
+                .optionalEnd()
                 .optionalStart()
                 .appendPattern(" ")
                 .optionalEnd()
