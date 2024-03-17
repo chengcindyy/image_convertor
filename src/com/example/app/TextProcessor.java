@@ -130,6 +130,8 @@ public abstract class TextProcessor {
                     break;
                 case "$40.00":
                     convertedFee = "20";
+                case "$44.00":
+                    convertedFee = "25";
                     break;
                 case "$50.00":
                     convertedFee = "30";
