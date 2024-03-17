@@ -104,7 +104,7 @@ public abstract class TextProcessor {
                 .appendPattern("yyyy")
                 .toFormatter(Locale.ENGLISH);
 
-        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("yyyy/MM/dd");
+        DateTimeFormatter targetFormat = DateTimeFormatter.ofPattern("MM/dd/yyyy");
 
         for (String visitDate : visitDates) {
             try {
@@ -125,18 +125,31 @@ public abstract class TextProcessor {
         for (String fee : fees) {
             String convertedFee;
             switch (fee) {
+                case "$30.00":
+                    convertedFee = "15";
+                    break;
+                case "$40.00":
+                    convertedFee = "20";
+                    break;
                 case "$50.00":
                     convertedFee = "30";
                     break;
                 case "$70.00":
+                case "$65.00":
                 case "$84.00":
                 case "$89.00":
+                case "$89.25":
                     convertedFee = "50";
+                    break;
+                case "$90.00":
+                    convertedFee = "90";
                     break;
                 case "$75.00":
                     convertedFee = "60";
                     break;
+                case "$96.00":
                 case "$105.00":
+                case "$126.00":
                 case "$133.00":
                     convertedFee = "75";
                     break;
