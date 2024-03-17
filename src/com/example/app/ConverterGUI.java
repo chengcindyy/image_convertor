@@ -246,11 +246,11 @@ public class ConverterGUI extends JFrame {
             if (text.trim().isEmpty()) {
                 //System.out.println("The PDF content is primarily image-based.");
                 //read multi-page image-style PDF
-                System.out.println("Found Image PDF File, ConvertImagePDFToCSV Called");
+                //System.out.println("Found Image PDF File, ConvertImagePDFToCSV Called");
                 convertImagePDFToCSV(document, outputCSVPath);
             } else {
                 //System.out.println("The PDF content is primarily text-based.");
-                System.out.println("Found Text PDF File, ConvertTextPDFToCSV Called");
+                //System.out.println("Found Text PDF File, ConvertTextPDFToCSV Called");
                 //read single-page text-style PDF
                 convertTextPDFToCSV(document, outputCSVPath);
             }
