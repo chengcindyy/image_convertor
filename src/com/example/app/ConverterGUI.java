@@ -15,14 +15,12 @@ import io.github.cdimascio.dotenv.Dotenv;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdfparser.PDFParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.ImageType;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.text.PDFTextStripper;
 
 import java.awt.*;
-
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -39,10 +37,9 @@ import javax.swing.UnsupportedLookAndFeelException;
 
 public class ConverterGUI extends JFrame {
 
-    static PathPreference pathPreference = new PathPreference();
+    private static final PathPreference pathPreference = new PathPreference();
     private final JTextField inputTextField;
     private final JTextField outputTextField;
-
     private JLabel progressLabel;
     private final Dotenv dotenv = Dotenv.load();
     private final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
@@ -53,9 +50,7 @@ public class ConverterGUI extends JFrame {
             .endpoint(ENDPOINT)
             .buildClient();
 
-
     private ConverterGUI(String lastUsedFolderPath, String lastUsedFilePath) {
-
         // set title and size
         setTitle("PDF to CSV Converter");
         setSize(400, 200); // Increased height to accommodate the new text area
@@ -87,17 +82,11 @@ public class ConverterGUI extends JFrame {
         }
 
         // Set buttons behavior
-        inputSelectButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), inputTextField, null);
-            }
-        });
+        inputSelectButton.addActionListener(e ->
+                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), inputTextField, null));
 
-        outputSelectButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), outputTextField, "csv");
-            }
-        });
+        outputSelectButton.addActionListener(e ->
+                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), outputTextField, "csv"));
 
         // call converter
         convertButton.addActionListener(e -> {
@@ -115,7 +104,6 @@ public class ConverterGUI extends JFrame {
                 // Re-enable the convert button after processing
                 convertButton.setEnabled(true);
             }
-
         });
     }
     public static void main(String[] args) {
@@ -132,16 +120,12 @@ public class ConverterGUI extends JFrame {
         String lastUsedFolderPath = pathPreference.getLastUsedFolder();
         String lastUsedFilePath = pathPreference.getLastUsedFilePath();
 
-        SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-                new ConverterGUI(lastUsedFolderPath, lastUsedFilePath).setVisible(true);
-            }
-        });
-
+        SwingUtilities.invokeLater(() ->
+                new ConverterGUI(lastUsedFolderPath, lastUsedFilePath).setVisible(true));
     }
 
     private JFileChooser createFileChooser(boolean selectDirectory, String lastUsedPath, String fileTypeFilter) {
-        JFileChooser chooser = new JFileChooser(lastUsedPath.isEmpty() ? new File(".") : new File(lastUsedPath));
+        JFileChooser chooser = new JFileChooser(lastUsedPath.isEmpty() ? new java.io.File(".") : new java.io.File(lastUsedPath));
 
         if (selectDirectory) {
             chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -155,7 +139,7 @@ public class ConverterGUI extends JFrame {
         return chooser;
     }
 
-    public void selectPathFromChooser(boolean selectDirectory, String lastUsedPath, JTextField targetTextField, String fileTypeFilter) {
+    private void selectPathFromChooser(boolean selectDirectory, String lastUsedPath, JTextField targetTextField, String fileTypeFilter) {
         JFileChooser chooser = createFileChooser(selectDirectory, lastUsedPath, fileTypeFilter);
         chooser.setDialogTitle(selectDirectory ? "Select Folder" : "Select " + fileTypeFilter + " File");
 
@@ -177,9 +161,8 @@ public class ConverterGUI extends JFrame {
         }
     }
 
-    private void processDirectory(String dirPath, String outputPath) {
+    private void processDirectory(String dirPath, String outputPath) throws IOException {
         File dir = new File(dirPath);
-
         boolean hasProcessedFiles = false;
         if (dir.exists() && dir.isDirectory()) {
             File[] fileList = dir.listFiles();
@@ -215,22 +198,15 @@ public class ConverterGUI extends JFrame {
                                 //System.out.println("Found pdf, PDFContentAnalyzer Called");
                                 PDFContentAnalyzer(file, outputPath);
                                 hasProcessedFiles = true;
-
                                 break;
                             case "jpeg":
                             case "jpg":
-                                System.out.println("Found jpg");
-                                break;
                             case "png":
-                                System.out.println("Found png");
-                                break;
                             case "gif":
-                                break;
                             case "bmp":
                                 //System.out.println("Found Image File, ReadImageWithOCR Called");
                                 readImageWithOCR(filePath, outputPath);
                                 hasProcessedFiles = true;
-
                                 break;
                             default:
                                 System.err.println("Unsupported file type: " + extension);
@@ -239,7 +215,6 @@ public class ConverterGUI extends JFrame {
 
                     }
                 }
-
                 if (hasProcessedFiles) {
                     System.out.println("Completed!");
                     progressLabel.setText("Completed!");
@@ -276,7 +251,6 @@ public class ConverterGUI extends JFrame {
             } else {
                 //System.out.println("The PDF content is primarily text-based.");
                 //System.out.println("Found Text PDF File, ConvertTextPDFToCSV Called");
-
                 //read single-page text-style PDF
                 convertTextPDFToCSV(document, outputCSVPath);
             }
@@ -287,7 +261,6 @@ public class ConverterGUI extends JFrame {
             e.printStackTrace();
         }
     }
-
 
     public void convertImagePDFToCSV(PDDocument document, String outputCSVPath) {
         try {
@@ -321,6 +294,7 @@ public class ConverterGUI extends JFrame {
                     List<String> lines = Arrays.asList(resultText.toString().split("\\r?\\n"));
                     // Since this is OCR, we use OCRTextProcessor directly
                     processTextBasedOnSource("imgPDF", lines, outputCSVPath);
+
                 } catch (Exception e) {
                     System.err.println("Error occurred while trying to recognize text from the image: " + e.getMessage());
                     // Handle the error or propagate it as needed
@@ -365,8 +339,6 @@ public class ConverterGUI extends JFrame {
                     Collections.singletonList(VisualFeatures.READ), // visualFeatures
                     null); // options: There are no options for READ visual feature
 
-            System.out.println("Image analysis results:");
-            System.out.println("Read:");
             for (DetectedTextLine line : result.getRead().getBlocks().get(0).getLines()) {
                 resultText.append(line.getText()).append("\n");
             }
@@ -377,7 +349,6 @@ public class ConverterGUI extends JFrame {
         }
         return resultText.toString();
     }
-
 
     private static class PDFTextProcessor extends TextProcessor {
         @Override
@@ -400,16 +371,19 @@ public class ConverterGUI extends JFrame {
         } else { // If not PDF, default to OCR
             processor = new OCRTextProcessor();
         }
+        createCSVPrinter(processor, lines, outputCSVPath);
+    }
 
-        for (int i = 0; i < visitDates.size(); i++) {
-            String dateStr = visitDates.get(i).replace(",", ", ");
-            try {
-                LocalDate date = LocalDate.parse(dateStr, originalFormat);
-                String formattedDate = date.format(targetFormat);
-                csvPrinter.printRecord(drTcm, patientName, formattedDate, fees.get(i));
-            } catch (DateTimeParseException e) {
-                System.err.println("Unable to parse date from line: " + visitDates.get(i));
-            }
+    private void createCSVPrinter(TextProcessor processor, List<String> lines, String outputCSVPath) {
+        boolean isNewFile = !Files.exists(Paths.get(outputCSVPath));
+        try (FileWriter out = new FileWriter(outputCSVPath, true);
+             CSVPrinter csvPrinter = isNewFile ?
+                     new CSVPrinter(out, CSVFormat.Builder.create().setHeader("Practitioner Name", "Patient Number", "Subject", "Start Date", "Start Time", "Duration", "End Date", "End Time").build()) :
+                     new CSVPrinter(out, CSVFormat.DEFAULT)) {
+            processor.processText(lines, csvPrinter);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
+
 }
