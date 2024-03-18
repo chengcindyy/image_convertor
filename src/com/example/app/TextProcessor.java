@@ -17,7 +17,7 @@ public abstract class TextProcessor {
     public static final int OCRTEXTPROCESSOR = 1;
     protected void extractInfo(List<String> lines, CSVPrinter csvPrinter, int processorType) throws IOException {
 
-        //System.out.println(lines);
+        System.out.println(lines);
         String patientNumber = "";
         if (processorType == OCRTEXTPROCESSOR) {
             patientNumber = lines.get(0);
@@ -47,7 +47,7 @@ public abstract class TextProcessor {
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            if (line.startsWith("Practitioner Info" )) {
+            if (line.toLowerCase().startsWith("practitioner info")) {
                 if (processorType == OCRTEXTPROCESSOR) {
                     String[] parts = lines.get(i+2).split(":");
                     if (parts.length > 1) {
@@ -77,7 +77,7 @@ public abstract class TextProcessor {
                 }
             }  else if (line.matches("^\\s*\\w+\\s+(0?[1-9]|[12]\\d|3[01])\\s*[,.]?\\s*\\d{4}\\s*$")) { //MMMM d, yyyy (the same line)
                 visitDates.add(line.trim());
-            } else if (line.matches("^\\$\\d+\\.\\d{2}$")) {
+            } else if (line.matches("^\\$?\\d+\\.\\d{2}$")) {
                 fees.add(line.trim());
             }
         }
@@ -139,42 +139,50 @@ public abstract class TextProcessor {
     private static List<String> feeConverter(List<String> fees) {
         List<String> convertedFees = new ArrayList<>();
         for (String fee : fees) {
+            fee = fee.replace("$","");
+            System.out.println(fees.size() + " " + fee);
             String convertedFee;
             switch (fee) {
-                case "$30.00":
+                case "25.00":
+                    convertedFee = "10";
+                    break;
+                case "30.00":
                     convertedFee = "15";
                     break;
-                case "$40.00":
+                case "40.00":
                     convertedFee = "20";
                     break;
-                case "$44.00":
+                case "44.00":
                     convertedFee = "25";
                     break;
-                case "$50.00":
+                case "50.00":
                     convertedFee = "30";
                     break;
-                case "$70.00":
-                case "$65.00":
-                case "$84.00":
-                case "$89.00":
-                case "$89.25":
+                case "70.00":
+                case "60.00":
+                case "65.00":
+                case "84.00":
+                case "89.00":
+                case "89.25":
                     convertedFee = "50";
                     break;
-                case "$75.00"://
+                case "75.00"://
                     convertedFee = "60";
                     break;
-                case "$90.00"://
+                case "90.00"://
                     convertedFee = "90";
                     break;
-                case "$96.00":
-                case "$105.00":
-                case "$114.00":
-                case "$126.00":
-                case "$133.00":
+                case "96.00":
+                case "105.00":
+                case "112.50":
+                case "114.00":
+                case "126.00":
+                case "133.00":
+                case "134.00":
                     convertedFee = "75";
                     break;
-                case "$140.00":
-                case "$178.00":
+                case "140.00":
+                case "178.00":
                     convertedFee = "100";
                     break;
                 default:
