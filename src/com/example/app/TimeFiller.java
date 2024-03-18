@@ -24,7 +24,7 @@ public class TimeFiller {
     static DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("MM/dd/yyyy");
     static DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("H:mm");
     private static final LocalTime START_TIME_PER_DAY = LocalTime.parse("10:00");
-    private static final LocalTime END_TIME_PER_DAY = LocalTime.parse("18:00");
+    private static final LocalTime END_TIME_PER_DAY = LocalTime.parse("21:30");
 
     // TODO: Connect path to GUI button
     static String path = "C:\\testfiles\\output.csv";
@@ -116,9 +116,9 @@ public class TimeFiller {
                 LocalTime endTime = appointment.getStartTime() != null ? appointment.getStartTime().plusMinutes(appointment.getDuration()) : null;
 
                 csvPrinter.printRecord(
-                        appointment.getPractitionerName(),
-                        appointment.getPatientNumber(),
-                        appointment.getSubject(),
+                        appointment.getPractitionerName().trim(),
+                        appointment.getPatientNumber().trim(),
+                        appointment.getSubject().trim(),
                         appointment.getStartDate().format(dateFormatter),
                         appointment.getStartTime() != null ? appointment.getStartTime().format(timeFormatter) : "",
                         appointment.getDuration(),

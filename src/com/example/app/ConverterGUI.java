@@ -41,6 +41,7 @@ public class ConverterGUI extends JFrame {
     private final JTextField inputTextField;
     private final JTextField outputTextField;
     private JLabel progressLabel;
+    private JProgressBar progressBar;
     private final Dotenv dotenv = Dotenv.load();
     private final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
     private final String ENDPOINT = dotenv.get("AZURE_TEXT_ANALYTICS_ENDPOINT");
@@ -64,12 +65,19 @@ public class ConverterGUI extends JFrame {
         JButton inputSelectButton = new JButton("Select Input Folder");
         JButton outputSelectButton = new JButton("Select a Output file");
         progressLabel = new JLabel("Click to start");
+        progressBar = new JProgressBar();
+        progressBar.setMinimum(0);
+        progressBar.setMaximum(100);
+        progressBar.setStringPainted(true);
+        progressBar.setPreferredSize(new Dimension(322, 20));
 
         // Add components to window
         add(inputSelectButton);
         add(inputTextField);
         add(outputSelectButton);
         add(outputTextField);
+        add(progressBar);
+        setVisible(true);
         add(convertButton);
         add(progressLabel);
 
@@ -162,6 +170,7 @@ public class ConverterGUI extends JFrame {
     }
 
     private void processDirectory(String dirPath, String outputPath) throws IOException {
+
         File dir = new File(dirPath);
         boolean hasProcessedFiles = false;
         if (dir.exists() && dir.isDirectory()) {
