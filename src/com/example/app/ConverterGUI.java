@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
@@ -38,14 +39,15 @@ import javax.swing.UnsupportedLookAndFeelException;
 public class ConverterGUI extends JFrame {
 
     private static final PathPreference pathPreference = new PathPreference();
-    private final JTextField inputTextField;
-    private final JTextField outputTextField;
-    private JLabel progressLabel;
-    private JProgressBar progressBar;
-    private final Dotenv dotenv = Dotenv.load();
+    private static JTextField step1InputTextField;
+    private static JTextField step1OutputTextField;
+    private static JTextField step2InputTextField;
+    private static JLabel progressLabel;
+    private static JProgressBar progressBar;
+    private static JTabbedPane tabbedPane = new JTabbedPane();
+    private static Dotenv dotenv = Dotenv.load();
     private final String SUBSCRIPTION_KEY_ONE = dotenv.get("AZURE_TEXT_ANALYTICS_SUBSCRIPTION_KEY");
     private final String ENDPOINT = dotenv.get("AZURE_TEXT_ANALYTICS_ENDPOINT");
-
     private ImageAnalysisClient client = new ImageAnalysisClientBuilder()
             .credential(new AzureKeyCredential(SUBSCRIPTION_KEY_ONE))
             .endpoint(ENDPOINT)
@@ -54,60 +56,97 @@ public class ConverterGUI extends JFrame {
     private ConverterGUI(String lastUsedFolderPath, String lastUsedFilePath) {
         // set title and size
         setTitle("PDF to CSV Converter");
-        setSize(400, 200); // Increased height to accommodate the new text area
+        setSize(370, 230);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLayout(new FlowLayout());
+        setLayout(new BorderLayout());
 
         // Create components
-        inputTextField = new JTextField(15);
-        outputTextField = new JTextField(15);
+        JPanel step1Panel = new JPanel();
+        JPanel step2Panel = new JPanel();
         JButton convertButton = new JButton("Convert to CSV");
-        JButton inputSelectButton = new JButton("Select Input Folder");
-        JButton outputSelectButton = new JButton("Select a Output file");
+        JButton processButton = new JButton("Process");
+        JButton step1InputSelectButton = new JButton("Select Input Folder");
+        JButton step1OutputSelectButton = new JButton("Select a Output File");
+        JButton step2InputSelectButton = new JButton("Select a Input File");
+        JLabel step1HeaderLabel = new JLabel("Step 1: Convert PDF to CSV");
+        JLabel step1ContentLabel = new JLabel("Select input folder and output file to convert");
+        JLabel step2HeaderLabel = new JLabel("Step 2: Arrange Appointment Time");
+        JLabel step2ContentLabel = new JLabel("After converting to csv, select the csv file to process");
+        step1InputTextField = new JTextField(15);
+        step1OutputTextField = new JTextField(15);
         progressLabel = new JLabel("Click to start");
         progressBar = new JProgressBar();
         progressBar.setMinimum(0);
         progressBar.setMaximum(100);
         progressBar.setStringPainted(true);
         progressBar.setPreferredSize(new Dimension(322, 20));
+        step2InputTextField = new JTextField(15);
 
         // Add components to window
-        add(inputSelectButton);
-        add(inputTextField);
-        add(outputSelectButton);
-        add(outputTextField);
-        add(progressBar);
+        // TAB:
+        tabbedPane.addTab("Step 1", step1Panel);
+        tabbedPane.addTab("Step 2", step2Panel);
+        add(tabbedPane, BorderLayout.CENTER);
         setVisible(true);
-        add(convertButton);
-        add(progressLabel);
+        // STEP 1:
+        step1Panel.add(step1HeaderLabel);
+        step1Panel.add(step1ContentLabel);
+        step1Panel.add(step1InputSelectButton);
+        step1Panel.add(step1InputTextField);
+        step1Panel.add(step1OutputSelectButton);
+        step1Panel.add(step1OutputTextField);
+        step1Panel.add(progressBar);
+        step1Panel.add(convertButton);
+        step1Panel.add(progressLabel);
+        // STEP 2:
+        step2Panel.add(step2HeaderLabel);
+        step2Panel.add(step2ContentLabel);
+        step2Panel.add(step2InputSelectButton);
+        step2Panel.add(step2InputTextField);
+        step2Panel.add(processButton);
 
         // Use saved path and file name
         if (!lastUsedFolderPath.isEmpty()) {
-            inputTextField.setText(lastUsedFolderPath);
+            step1InputTextField.setText(lastUsedFolderPath);
+
         }
         if (!lastUsedFilePath.isEmpty()) {
-            outputTextField.setText(lastUsedFilePath);
+            step1OutputTextField.setText(lastUsedFilePath);
+            step2InputTextField.setText(lastUsedFilePath);
         }
 
         // Set buttons behavior
-        inputSelectButton.addActionListener(e ->
-                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), inputTextField, null));
+        step1InputSelectButton.addActionListener(e ->
+                selectPathFromChooser(true, pathPreference.getLastUsedFolder(), step1InputTextField, null));
 
-        outputSelectButton.addActionListener(e ->
-                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), outputTextField, "csv"));
+        step1OutputSelectButton.addActionListener(e ->
+                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), step1OutputTextField, "csv"));
+
+        step2InputSelectButton.addActionListener(e ->
+                selectPathFromChooser(false, pathPreference.getLastUsedFilePath(), step1OutputTextField, "csv"));
 
         // call converter
         convertButton.addActionListener(e -> {
-            String inputPath = inputTextField.getText().trim();
-            String outputPath = outputTextField.getText().trim();
+            String step1InputPath = step1InputTextField.getText().trim();
+            String step1OutputPath = step1OutputTextField.getText().trim();
 
             // Disable the convert button while processing
             convertButton.setEnabled(false);
 
             try {
-                processDirectory(inputPath, outputPath);
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                processDirectory(step1InputPath, step1OutputPath);
+            } finally {
+                // Re-enable the convert button after processing
+                convertButton.setEnabled(true);
+            }
+        });
+
+        processButton.addActionListener(e -> {
+            String step2InputPath = step2InputTextField.getText().trim();
+
+            try {
+                TimeFiller filler = new TimeFiller();
+                TimeFiller.processCSV(step2InputPath);
             } finally {
                 // Re-enable the convert button after processing
                 convertButton.setEnabled(true);
@@ -169,75 +208,92 @@ public class ConverterGUI extends JFrame {
         }
     }
 
-    private void processDirectory(String dirPath, String outputPath) throws IOException {
+    private void processDirectory(String dirPath, String outputPath) {
+        SwingWorker<Void, Integer> worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                File dir = new File(dirPath);
+                if (dir.exists() && dir.isDirectory()) {
+                    File[] fileList = dir.listFiles();
+                    if (fileList != null) {
+                        int fileListSize = fileList.length;
+                        System.out.println("Reading " + fileListSize + " file(s)...");
 
-        File dir = new File(dirPath);
-        boolean hasProcessedFiles = false;
-        if (dir.exists() && dir.isDirectory()) {
-            File[] fileList = dir.listFiles();
-            if (fileList != null) {
+                        for (int i = 0; i < fileListSize; i++) {
+                            if (isCancelled()) {
+                                break; // Allow the swing worker to be cancellable
+                            }
 
-                int fileListSize = fileList.length;
-                System.out.println("Reading "+ fileListSize + " file(s)...");
+                            File file = fileList[i];
+                            if (file.isFile()) {
+                                String filePath = file.getAbsolutePath();
+                                String extension = "";
 
-                for (int i = 0; i < fileListSize; i++) {
+                                int j = filePath.lastIndexOf('.');
+                                if (j > 0) {
+                                    extension = filePath.substring(j + 1).toLowerCase();
+                                }
 
-                    File file = fileList[i];
-                    int remainingFiles = fileListSize - i;
+                                System.out.println("Processing " + file.getName() + "...");
 
-                    if (file.isFile()) {
-                        String filePath = file.getAbsolutePath();
-                        String extension = "";
+                                switch (extension) {
+                                    case "pdf":
+                                        //check content (img or txt)
+                                        //System.out.println("Found pdf, PDFContentAnalyzer Called");
+                                        PDFContentAnalyzer(file, outputPath);
+                                        break;
+                                    case "jpeg":
+                                    case "jpg":
+                                    case "png":
+                                    case "gif":
+                                    case "bmp":
+                                        //System.out.println("Found Image File, ReadImageWithOCR Called");
+                                        readImageWithOCR(filePath, outputPath);
+                                        break;
+                                    default:
+                                        System.err.println("Unsupported file type: " + extension);
+                                        break;
+                                }
 
-                        int j = filePath.lastIndexOf('.');
-                        if (j > 0) {
-                            extension = filePath.substring(j+1).toLowerCase();
+                                // Update progress
+                                int progress = (int) (((double) (i + 1) / fileListSize) * 100);
+                                publish(progress);
+                            }
                         }
-
-                        System.out.println("Processing " + file.getName() + "... "
-                                + remainingFiles + " file(s) remained.");
-                        // TODO:Update the status label with processing progress
-//                        SwingUtilities.invokeLater(() -> {
-//                            progressLabel.setText("Processing " + file.getName() + "... " + remainingFiles + " file(s) remained.");
-//                        });
-
-                        switch (extension) {
-                            case "pdf":
-                                //check content (img or txt)
-                                //System.out.println("Found pdf, PDFContentAnalyzer Called");
-                                PDFContentAnalyzer(file, outputPath);
-                                hasProcessedFiles = true;
-                                break;
-                            case "jpeg":
-                            case "jpg":
-                            case "png":
-                            case "gif":
-                            case "bmp":
-                                //System.out.println("Found Image File, ReadImageWithOCR Called");
-                                readImageWithOCR(filePath, outputPath);
-                                hasProcessedFiles = true;
-                                break;
-                            default:
-                                System.err.println("Unsupported file type: " + extension);
-                                break;
-                        }
-
+                    } else {
+                        JOptionPane.showMessageDialog(null, "No files found in the directory.", "Error", JOptionPane.ERROR_MESSAGE);
                     }
+                } else {
+                    JOptionPane.showMessageDialog(null, "Invalid directory path.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
-                if (hasProcessedFiles) {
+                return null;
+            }
+
+            @Override
+            protected void process(List<Integer> chunks) {
+                int mostRecentValue = chunks.get(chunks.size() - 1);
+                progressBar.setValue(mostRecentValue);
+                progressLabel.setText("Processing... " + mostRecentValue + "% completed");
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    get(); // Call get to rethrow exceptions occurred during doInBackground
                     System.out.println("Completed!");
+                    progressBar.setValue(100);
                     progressLabel.setText("Completed!");
                     JOptionPane.showMessageDialog(null, "CSV file was created or updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(null, "No valid files found for conversion.", "Info", JOptionPane.INFORMATION_MESSAGE);
+                } catch (InterruptedException | ExecutionException e) {
+                    e.printStackTrace();
+                    progressLabel.setText("Failed!");
+                    JOptionPane.showMessageDialog(null, "Error occurred during conversion.", "Error", JOptionPane.ERROR_MESSAGE);
                 }
-            } else {
-                JOptionPane.showMessageDialog(null, "No files found in the directory.", "Error", JOptionPane.ERROR_MESSAGE);
             }
-        } else {
-            JOptionPane.showMessageDialog(null, "Invalid directory path.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        };
+        worker.execute();
     }
+
 
     public void PDFContentAnalyzer(File file, String outputCSVPath) {
         try {
