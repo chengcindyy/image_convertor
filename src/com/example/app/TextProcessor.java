@@ -144,54 +144,21 @@ public abstract class TextProcessor {
         for (String fee : fees) {
             fee = fee.replace("$","");
             System.out.println(fees.size() + " " + fee);
-            String convertedFee;
-            switch (fee) {
-                case "25.00":
-                    convertedFee = "10";
-                    break;
-                case "30.00":
-                    convertedFee = "15";
-                    break;
-                case "40.00":
-                    convertedFee = "20";
-                    break;
-                case "44.00":
-                    convertedFee = "25";
-                    break;
-                case "50.00":
-                    convertedFee = "30";
-                    break;
-                case "60.00":
-                case "65.00":
-                case "70.00":
-                case "84.00":
-                case "89.00":
-                case "89.25":
-                    convertedFee = "50";
-                    break;
-                case "75.00"://
-                    convertedFee = "60";
-                    break;
-                case "90.00"://
-                    convertedFee = "90";
-                    break;
-                case "96.00":
-                case "105.00":
-                case "112.50":
-                case "114.00":
-                case "126.00":
-                case "133.00":
-                case "134.00":
-                    convertedFee = "75";
-                    break;
-                case "140.00":
-                case "178.00":
-                    convertedFee = "100";
-                    break;
-                default:
-                    convertedFee = "Unknown";
-                    break;
-            }
+            String convertedFee = switch (fee) {
+                case "25.00" -> "10";
+                case "30.00" -> "15";
+                case "40.00" -> "20";
+                case "44.00" -> "25";
+                case "50.00" -> "30";
+                case "60.00", "65.00", "70.00", "84.00", "89.00", "89.25" -> "50";
+                case "75.00" ->//
+                        "60";
+                case "90.00" ->//
+                        "90";
+                case "96.00", "105.00", "112.50", "114.00", "126.00", "133.00", "134.00" -> "75";
+                case "140.00", "178.00" -> "100";
+                default -> "Unknown";
+            };
 
             convertedFees.add(convertedFee);
         }
