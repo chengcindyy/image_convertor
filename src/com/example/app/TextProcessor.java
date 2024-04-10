@@ -85,10 +85,13 @@ public abstract class TextProcessor {
         List<String> formattedDates = dateConverter(visitDates);
         List<String> convertedFees = feeConverter(fees);
 
+
         for (int i = 0; i < formattedDates.size(); i++) {
             String dateStr = formattedDates.get(i);
-            String fee = (i < convertedFees.size()) ? convertedFees.get(i) : "";
-            csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, fee, dateStr, endTime);
+            //TODO: Error: patientNumber is not an integer.
+            //Error occurred while trying to recognize text from the image: Index 1 out of bounds for length 1
+            String duration = convertedFees.get(i*2+1);
+            csvPrinter.printRecord(dr, patientNumber, patientName, dateStr, startTime, duration, dateStr, endTime);
         }
     }
 
@@ -158,9 +161,9 @@ public abstract class TextProcessor {
                 case "50.00":
                     convertedFee = "30";
                     break;
-                case "70.00":
                 case "60.00":
                 case "65.00":
+                case "70.00":
                 case "84.00":
                 case "89.00":
                 case "89.25":
